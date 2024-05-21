@@ -1,0 +1,7 @@
+polars
+windrose
+statsmodels
+matplotlib
+seaborn
+missingno
+pyarrow

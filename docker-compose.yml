@@ -1,0 +1,9 @@
+services:
+  santos:
+    build: ./
+    tty: true
+    container_name: santos_dataset
+    volumes:
+      - .:/usr/src/code
+      - /usr/src/code/.venv
+    working_dir: /usr/src/code/
