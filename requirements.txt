@@ -6,3 +6,4 @@ seaborn
 missingno
 pyarrow
 torch
+uniplot
