@@ -1,6 +1,5 @@
 import datetime
 import pathlib
-import shutil
 import polars as pl
 
 
@@ -62,6 +61,9 @@ def main():
         .rename({"SSH": "ssh"})
         .with_columns([pl.col("ssh").cast(pl.Float32)])
         .select(["datetime", "cross_shore_current", "ssh"])
+        .filter(
+            pl.col("cross_shore_current").is_not_null() & pl.col("ssh").is_not_null()
+        )
     )
 
     dfs["sofs_praticagem"] = df
@@ -83,6 +85,7 @@ def main():
         .rename({"Maré real": "ssh"})
         .with_columns([pl.col("ssh").cast(pl.Float32)])
         .drop(["Datetime"])
+        .filter(pl.col("ssh").is_not_null())
     ).select(["datetime", "ssh"])
 
     dfs["ssh_praticagem"] = df
@@ -115,6 +118,11 @@ def main():
         .drop(["Data", "Altura", "Período", "Direção", "Intensidade"])
         .select(["datetime", "hs", "tp", "ws"])
         .sort("datetime")
+        .filter(
+            pl.col("hs").is_not_null()
+            & pl.col("tp").is_not_null()
+            & pl.col("ws").is_not_null()
+        )
     )
 
     dfs["waves_palmas"] = df
@@ -130,7 +138,9 @@ def main():
                 pl.col("vx").round(2).cast(pl.Float32).alias("vx"),
                 pl.col("vy").round(2).cast(pl.Float32).alias("vy"),
             ]
-        ).sort("datetime")
+        )
+        .sort("datetime")
+        .filter(pl.col("vx").is_not_null() & pl.col("vy").is_not_null())
     ).select(["datetime", "vx", "vy"])
 
     dfs["wind_praticagem"] = df
@@ -154,6 +164,7 @@ def main():
         )
         .sort("datetime")
         .drop(["Direction", "Velocity_ms", "Projected_current", "Datetime"])
+        .filter(pl.col("cross_shore_current").is_not_null())
     ).select(["datetime", "cross_shore_current"])
 
     dfs["current_praticagem"] = df

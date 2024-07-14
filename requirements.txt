@@ -5,5 +5,5 @@ matplotlib
 seaborn
 missingno
 pyarrow
-torch
+torch==2.3
 uniplot
