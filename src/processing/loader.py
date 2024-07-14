@@ -1,7 +1,6 @@
 from collections import defaultdict
 import pathlib
 import polars as pl
-import numpy as np
 import torch
 from torch.utils.data import Dataset as TorchDataset
 
@@ -106,6 +105,7 @@ class SantosTestDataset(SantosDataset):
         data_path: pathlib.Path,
         context_masks_path: pathlib.Path,
         target_masks_path: pathlib.Path,
+        max_context_size: dict[str, float] | None = None,
     ):
 
         super().__init__(data_path=data_path)
@@ -120,6 +120,8 @@ class SantosTestDataset(SantosDataset):
         self.target_masks_path = target_masks_path
 
         context_sample_size = None
+
+        self.max_context_size = max_context_size
 
         self.original_context_masks = {
             f.stem.replace("_context", ""): pl.read_parquet(f)
@@ -160,11 +162,13 @@ class SantosTestDatasetTorch(SantosTestDataset, TorchDataset):
         data_path: pathlib.Path,
         context_masks_path: pathlib.Path,
         target_masks_path: pathlib.Path,
+        max_context_size: dict[str, float] | None = None,
     ):
         super().__init__(
             data_path=data_path,
             context_masks_path=context_masks_path,
             target_masks_path=target_masks_path,
+            max_context_size=max_context_size,
         )
 
         self.data = {
@@ -190,6 +194,15 @@ class SantosTestDatasetTorch(SantosTestDataset, TorchDataset):
             ts_name: self.data[ts_name][mask[:, idx]]
             for ts_name, mask in self.context_masks.items()
         }
+
+        if self.max_context_size is not None:
+            for ts_name, c in context_data.items():
+                last_measurement = c[-1, 0]
+                lbound = torch.searchsorted(
+                    c[:, 0].contiguous(),
+                    last_measurement - self.max_context_size[ts_name],
+                )
+                context_data[ts_name] = c[lbound:]
 
         context_timestamps = {ts_name: c[:, 0] for ts_name, c in context_data.items()}
         context_features = {ts_name: c[:, 1:] for ts_name, c in context_data.items()}
