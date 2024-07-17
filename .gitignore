@@ -32,3 +32,5 @@ Thumbs.db
 # User ignore
 data/*/*
 !data/*/.gitkeep
+
+src/models/neural_ode/lightning_logs
