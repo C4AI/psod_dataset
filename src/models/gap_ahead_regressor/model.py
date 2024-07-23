@@ -71,6 +71,29 @@ def create_fully_connected_edge_index(n_nodes: int) -> torch.Tensor:
     return edge_index
 
 
+def index_agreement_torch(s: torch.Tensor, o: torch.Tensor) -> torch.Tensor:
+    """
+    index of agreement
+    Willmott (1981, 1982)
+
+    Args:
+        s: simulated
+        o: observed
+
+    Returns:
+        ia: index of agreement
+    """
+    o_bar = torch.mean(o, dim=0)
+    ia = 1 - (torch.sum((o - s) ** 2, dim=0)) / (
+        torch.sum(
+            (torch.abs(s - o_bar) + torch.abs(o - o_bar)) ** 2,
+            dim=0,
+        )
+    )
+
+    return ia
+
+
 def create_fully_connected_bipartite_edge_index(
     n_nodes: tuple[int, int]
 ) -> torch.Tensor:
