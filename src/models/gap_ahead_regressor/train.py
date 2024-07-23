@@ -4,7 +4,7 @@ import pathlib
 import torch
 import uniplot
 from torch.utils.data import DataLoader
-from model import GapAheadAMTSRegressor, PositionalEncoding
+from model import GapAheadAMTSRegressor, PositionalEncoding, index_agreement_torch
 
 import sys
 
@@ -15,52 +15,31 @@ from processing.loader import (
 
 from dataset import SantosTrainDatasetTorch
 
-
-def index_agreement_torch(s: torch.Tensor, o: torch.Tensor) -> torch.Tensor:
-    """
-    index of agreement
-    Willmott (1981, 1982)
-
-    Args:
-        s: simulated
-        o: observed
-
-    Returns:
-        ia: index of agreement
-    """
-    o_bar = torch.mean(o, dim=0)
-    ia = 1 - (torch.sum((o - s) ** 2, dim=0)) / (
-        torch.sum(
-            (torch.abs(s - o_bar) + torch.abs(o - o_bar)) ** 2,
-            dim=0,
-        )
-    )
-
-    return ia
+NUM_LAYERS_RNN = 1
+NUM_LAYERS_GNN = 2
+TIME_ENCODING_SIZE = 50
+POS_ENC_DROPOUT = 0.0
+HIDDEN_UNITS = 100
 
 
 def main():
 
-    num_layers_rnn = 1
-    num_layers_gnn = 2
-    hidden_units = 100
     epochs = 100
     batch_size = 64
-    context_increase_step = 60 * 12.
-    forecast_increase_step = 60 * 4.
+    context_increase_step = 60 * 12.0
+    forecast_increase_step = 60 * 4.0
     sample_size_per_epoch = 50000
-    time_encoding_size = 50
-    pos_enc_dropout = 0.0
     train_data_path = "data/02_processed/train"
     test_data_path = "data/02_processed/test"
     lr = 0.001
-    now_str = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
+    model_version = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
     start_model_path = ""
+    model_name = pathlib.Path(__file__).parent.name
 
     # sample_size_per_epoch = 50
     # start_model_path = "data/04_model_output/20240714032850/epoch_11.pt"
-    
-    out_path = f"data/04_model_output/{now_str}"
+
+    out_path = f"data/04_trained_models/{model_name}/{model_version}"
 
     out_path = pathlib.Path(out_path)
     out_path.mkdir(parents=True, exist_ok=True)
@@ -96,23 +75,22 @@ def main():
     max_context_window_lengths = defaultdict(
         float,
         {
-            "astronomical_tide": 60 * 24.0*2,
-            "current_praticagem": 60 * 24.0*7,
-            "sofs_praticagem": 60 * 24.0*2,
-            "ssh_praticagem": 60 * 24.0*7,
-            "waves_palmas": 60 * 24.0*7,
-            "wind_praticagem": 60 * 24.0*7,
+            "astronomical_tide": 60 * 24.0 * 2,
+            "current_praticagem": 60 * 24.0 * 7,
+            "sofs_praticagem": 60 * 24.0 * 2,
+            "ssh_praticagem": 60 * 24.0 * 7,
+            "waves_palmas": 60 * 24.0 * 7,
+            "wind_praticagem": 60 * 24.0 * 7,
         },
     )
 
     max_forecast_window_lengths = defaultdict(
         float,
         {
-            "current_praticagem": 60 * 24.0*2,
-            "waves_palmas": 60 * 24.0*2,
+            "current_praticagem": 60 * 24.0 * 2,
+            "waves_palmas": 60 * 24.0 * 2,
         },
     )
-
 
     look_ahead_lengths = defaultdict(
         float,
@@ -153,12 +131,12 @@ def main():
 
     model = GapAheadAMTSRegressor(
         input_sizes=train_dataset.n_features,
-        num_layers_rnns=num_layers_rnn,
-        hidden_units=hidden_units,
+        num_layers_rnns=NUM_LAYERS_RNN,
+        hidden_units=HIDDEN_UNITS,
         time_encoder=PositionalEncoding(
-            time_encoding_size=time_encoding_size, dropout=pos_enc_dropout
+            time_encoding_size=TIME_ENCODING_SIZE, dropout=POS_ENC_DROPOUT
         ),
-        num_layers_gnn=num_layers_gnn,
+        num_layers_gnn=NUM_LAYERS_GNN,
     )
 
     if start_model_path != "":
@@ -229,7 +207,7 @@ def main():
             )
             batch_count += 1
 
-        test_results:dict[str,list[float]] = defaultdict(list)
+        test_results: dict[str, list[float]] = defaultdict(list)
         model.zero_grad()
 
         batch_count = 0
@@ -239,8 +217,10 @@ def main():
         y_timestamps_ = y_timestamps
         y_features_ = y_features
 
-        for ((x_timestamps, x_features), y_timestamps), y_features, in test_dl:
-
+        for (
+            ((x_timestamps, x_features), y_timestamps),
+            y_features,
+        ) in test_dl:
 
             x_timestamps = {
                 ts_name: [xi.to(device) for xi in x]
@@ -263,7 +243,22 @@ def main():
 
             with torch.no_grad():
                 t_inferences = torch.stack(
-                    [torch.stack([(timestamp_tensor[0] if timestamp_tensor.size(0)>0 else torch.tensor(torch.inf,device=timestamp_tensor.device)) for i,timestamp_tensor in enumerate(y)]) for ts_name, y in y_timestamps.items()],dim=-1
+                    [
+                        torch.stack(
+                            [
+                                (
+                                    timestamp_tensor[0]
+                                    if timestamp_tensor.size(0) > 0
+                                    else torch.tensor(
+                                        torch.inf, device=timestamp_tensor.device
+                                    )
+                                )
+                                for i, timestamp_tensor in enumerate(y)
+                            ]
+                        )
+                        for ts_name, y in y_timestamps.items()
+                    ],
+                    dim=-1,
                 ).min(dim=-1)[0]
 
                 forecast = model(
@@ -283,16 +278,16 @@ def main():
                     )
                     for ts_name, f in forecast.items()
                 }
-                current_loss = losses_by_ts["current_praticagem"].detach().cpu().mean(dim=0)
+                current_loss = (
+                    losses_by_ts["current_praticagem"].detach().cpu().mean(dim=0)
+                )
                 waves_loss = losses_by_ts["waves_palmas"].detach().cpu().mean(dim=0)
 
+            test_results["current_praticagem"].append(current_loss)  # type: ignore
+            test_results["waves_palmas"].append(waves_loss)  # type: ignore
 
-            test_results["current_praticagem"].append(current_loss) # type: ignore
-            test_results["waves_palmas"].append(waves_loss) # type: ignore
-
-
-            if batch_count == len(test_dl)//2:
-                for ts_name,y_ts_list in y_timestamps.items():
+            if batch_count == len(test_dl) // 2:
+                for ts_name, y_ts_list in y_timestamps.items():
                     if ts_name == "current_praticagem":
                         uniplot.plot(
                             xs=[
@@ -300,45 +295,64 @@ def main():
                                 y_ts_list[0].cpu().numpy(),
                             ],
                             ys=[
-                                y_features[ts_name][0][:,0].squeeze().cpu().numpy(),
-                                forecast[ts_name][0][:,0].squeeze().cpu().detach().numpy(),
+                                y_features[ts_name][0][:, 0].squeeze().cpu().numpy(),
+                                forecast[ts_name][0][:, 0]
+                                .squeeze()
+                                .cpu()
+                                .detach()
+                                .numpy(),
                             ],
                             color=True,
-                            legend_labels=[ "Target","Forecast"],
-                            title = ts_name,
+                            legend_labels=["Target", "Forecast"],
+                            title=ts_name,
                         )
                     elif ts_name == "waves_palmas":
 
-                        feats = ["hs","tp","ws"]
-                        for i,f in enumerate(feats):
+                        feats = ["hs", "tp", "ws"]
+                        for i, f in enumerate(feats):
                             uniplot.plot(
                                 xs=[
                                     y_ts_list[0].cpu().numpy(),
                                     y_ts_list[0].cpu().numpy(),
                                 ],
                                 ys=[
-                                    y_features[ts_name][0][:,i].squeeze().cpu().numpy(),
-                                    forecast[ts_name][0][:,i].squeeze().cpu().detach().numpy(),
+                                    y_features[ts_name][0][:, i]
+                                    .squeeze()
+                                    .cpu()
+                                    .numpy(),
+                                    forecast[ts_name][0][:, i]
+                                    .squeeze()
+                                    .cpu()
+                                    .detach()
+                                    .numpy(),
                                 ],
                                 color=True,
-                                legend_labels=["Target","Forecast"],
-                                title = f"{ts_name} {f}",
+                                legend_labels=["Target", "Forecast"],
+                                title=f"{ts_name} {f}",
                             )
-             
-                        
 
             batch_count += 1
 
-        test_results_ = {ts_name:torch.stack(losses).mean(dim=0) for ts_name,losses in test_results.items()}
+        test_results_ = {ts_name: torch.stack(losses).mean(dim=0) for ts_name, losses in test_results.items()}  # type: ignore
         print(f"\n\nTEST RESULTS EPOCH {epoch}: {test_results_}\n\n")
-        context_window_lengths={ts_name:min(context_window_lengths[ts_name] + context_increase_step,max_context_window_lengths[ts_name]) for ts_name in context_window_lengths}
+        context_window_lengths = {
+            ts_name: min(
+                context_window_lengths[ts_name] + context_increase_step,
+                max_context_window_lengths[ts_name],
+            )
+            for ts_name in context_window_lengths
+        }
         train_dataset.context_window_lengths = context_window_lengths
 
-        target_window_lengths={ts_name:min(target_window_lengths[ts_name] + forecast_increase_step,max_forecast_window_lengths[ts_name]) for ts_name in target_window_lengths}
+        target_window_lengths = {
+            ts_name: min(
+                target_window_lengths[ts_name] + forecast_increase_step,
+                max_forecast_window_lengths[ts_name],
+            )
+            for ts_name in target_window_lengths
+        }
         train_dataset.target_window_lengths = target_window_lengths
-        torch.save(model.state_dict(), out_path/f"epoch_{epoch}.pt")
-
-        
+        torch.save(model.state_dict(), out_path / f"epoch_{epoch}.pt")
 
 
 if __name__ == "__main__":

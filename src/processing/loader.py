@@ -70,7 +70,14 @@ class SantosDataset:
             if f.is_file()
         }
 
-        base_date = min([df["datetime"].min() for df in self.original_data.values()])
+        self.feature_names = {
+            ts_name: [col for col in df.columns if col != "datetime"]
+            for ts_name, df in self.original_data.items()
+        }
+
+        base_date = min(
+            [df["datetime"].min() for df in self.original_data.values()]  # type: ignore
+        )
 
         self.original_data = {
             ts_name: df.with_columns(
