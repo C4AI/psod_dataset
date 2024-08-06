@@ -34,3 +34,5 @@ data/*/*
 !data/*/.gitkeep
 
 src/models/neural_ode/lightning_logs
+
+*.out
