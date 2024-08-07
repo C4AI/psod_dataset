@@ -101,7 +101,9 @@ def main():
     y_features: dict[str, list[pl.DataFrame]] = {}
     y_features_names: dict[str, list[str]] = {}
 
-    for target_mask_path in (test_path / "target_masks").glob("*.parquet"):
+    for target_mask_path in (test_path / "missing_ratio_20" / "target_masks").glob(
+        "*.parquet"
+    ):
         target_mask = pl.read_parquet(target_mask_path)
         ts_name = target_mask_path.stem.replace("_target", "")
         ts_data = pl.read_parquet(test_path / f"{ts_name}.parquet")
@@ -142,7 +144,7 @@ def main():
 
             if len(results) != len(y_features[ts_name]):
                 print(
-                    f"Number of results ({len(results)}) for ts {ts_name} is different from number of target masks ({len(y_features[ts_name])})"
+                    f"Number of results ({len(results)}) for ts {ts_name} model {model_name} is different from number of target masks ({len(y_features[ts_name])})"
                 )
                 continue
 

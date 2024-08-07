@@ -196,7 +196,9 @@ class SantosTestDatasetTorch(SantosTestDataset, TorchDataset):
             for ts_name, mask in self.original_target_masks.items()
         }
 
-    def __getitem__(self, idx) -> AsyncMTSWindowPair:
+    def get_context_data(
+        self, idx
+    ) -> tuple[dict[str, torch.Tensor], dict[str, torch.Tensor]]:
         context_data = {
             ts_name: self.data[ts_name][mask[:, idx]]
             for ts_name, mask in self.context_masks.items()
@@ -204,6 +206,8 @@ class SantosTestDatasetTorch(SantosTestDataset, TorchDataset):
 
         if self.max_context_size is not None:
             for ts_name, c in context_data.items():
+                if c.shape[0] == 0:
+                    continue
                 last_measurement = c[-1, 0]
                 lbound = torch.searchsorted(
                     c[:, 0].contiguous(),
@@ -214,6 +218,9 @@ class SantosTestDatasetTorch(SantosTestDataset, TorchDataset):
         context_timestamps = {ts_name: c[:, 0] for ts_name, c in context_data.items()}
         context_features = {ts_name: c[:, 1:] for ts_name, c in context_data.items()}
 
+        return context_timestamps, context_features
+
+    def get_target_data(self, idx):
         target_data = {
             ts_name: self.data[ts_name][mask[:, idx]]
             for ts_name, mask in self.target_masks.items()
@@ -221,6 +228,14 @@ class SantosTestDatasetTorch(SantosTestDataset, TorchDataset):
 
         target_timestamps = {ts_name: c[:, 0] for ts_name, c in target_data.items()}
         target_features = {ts_name: c[:, 1:] for ts_name, c in target_data.items()}
+
+        return target_timestamps, target_features
+
+    def __getitem__(self, idx) -> AsyncMTSWindowPair:
+
+        context_timestamps, context_features = self.get_context_data(idx)
+
+        target_timestamps, target_features = self.get_target_data(idx)
 
         x = ((context_timestamps, context_features), target_timestamps)
         y = target_features

@@ -1,4 +1,5 @@
 from collections import defaultdict
+from dataclasses import dataclass
 import math
 import torch
 import torch.nn as nn
@@ -11,6 +12,24 @@ from processing.loader import (
     MultivariateFeaturesSample,
     MultivariateTimestampsSample,
 )
+
+
+@dataclass
+class ModelConfig:
+    num_layers_rnn: int
+    num_layers_gnn: int
+    num_heads_gnn:int
+    time_encoding_size: int
+    hidden_units: int
+
+    def to_dict(self):
+        return {
+            "num_layers_rnn": self.num_layers_rnn,
+            "num_layers_gnn": self.num_layers_gnn,
+            "num_heads_gnn":self.num_heads_gnn,
+            "time_encoding_size": self.time_encoding_size,
+            "hidden_units": self.hidden_units,
+        }
 
 
 class PositionalEncoding(nn.Module):
@@ -27,7 +46,7 @@ class PositionalEncoding(nn.Module):
 
     """
 
-    def __init__(self, time_encoding_size: int, dropout: float, **kwargs):
+    def __init__(self, time_encoding_size: int, dropout: float = 0, **kwargs):
         super().__init__()
         self.dropout = nn.Dropout(p=dropout)
         self.hidden_size = time_encoding_size
@@ -128,12 +147,12 @@ def create_fully_connected_hetero_edge_index(
 
 
 class GNN(nn.Module):
-    def __init__(self, hidden_channels: int, out_channels: int, num_layers: int):
+    def __init__(self, hidden_channels: int, num_layers: int,num_heads:int):
         super().__init__()
 
         self.convs = nn.ModuleList(
             [
-                pyg_nn.GATv2Conv(hidden_channels, hidden_channels, add_self_loops=False)
+                pyg_nn.GATConv(hidden_channels, hidden_channels,heads=num_heads, add_self_loops=False,concat=False)
                 for _ in range(num_layers)
             ]
         )
@@ -163,11 +182,12 @@ class HeteroGNN(nn.Module):
         *,
         hidden_units: int,
         num_layers: int,
+        num_heads:int,
         node_types: list[str],
     ) -> None:
         super().__init__()
 
-        homo_gnn = GNN(hidden_units, hidden_units, num_layers)
+        homo_gnn = GNN(hidden_units, num_layers,num_heads)
 
         self.gnn = pyg_nn.to_hetero(
             homo_gnn,
@@ -202,6 +222,7 @@ class GapAheadAMTSRegressor(nn.Module):
         num_layers_rnns: int,
         hidden_units: int,
         num_layers_gnn: int = 0,
+        num_heads_gnn:int=0,
         time_encoder: nn.Module | None = None,
     ) -> None:
         super().__init__()
@@ -239,6 +260,7 @@ class GapAheadAMTSRegressor(nn.Module):
             self.gnn = HeteroGNN(
                 hidden_units=hidden_units,
                 num_layers=num_layers_gnn,
+                num_heads=num_heads_gnn,
                 node_types=self.canonical_order,
             )
         else:
@@ -300,7 +322,7 @@ class GapAheadAMTSRegressor(nn.Module):
         common_results = {
             ts_name: torch.cat(
                 [
-                    out[[i], len(inputs[ts_name][i]) - 1]
+                    out[[i], context[ts_name][i][:-1].shape[0] - 1]
                     for i in range(len(inputs[ts_name]))
                 ]
             )
