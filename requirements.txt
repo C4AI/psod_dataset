@@ -9,3 +9,4 @@ torch==2.3
 uniplot
 torchdyn
 pytorch-lightning
+seaborn
