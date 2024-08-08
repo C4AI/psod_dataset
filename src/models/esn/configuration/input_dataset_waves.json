@@ -1,0 +1,19 @@
+{ "folder_train": "data\\02_processed\\train\\",
+  "folder_test" : "data\\02_processed\\test\\",
+  "context_masks_folder": "data\\02_processed\\test\\missing_ratio_0\\context_masks\\",
+  "target_masks_folder": "data\\02_processed\\test\\missing_ratio_0\\target_masks\\",
+  "timeseries": [
+    {"filename": "wind_praticagem.parquet",
+      "is_predicted": false,
+      "transformations": [],
+      "description": "wind_praticagem",
+      "forecast": true },
+    {"filename": "waves_palmas.parquet",
+      "is_predicted": true,
+      "transformations": [],
+      "description": "waves_palmas",
+      "forecast": false }
+],
+      "input_datasets": ["wind_praticagem", "waves_palmas"],
+      "target_datasets" : ["waves_palmas"]
+  }

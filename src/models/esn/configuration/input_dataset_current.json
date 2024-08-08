@@ -1,0 +1,19 @@
+{ "folder_train": "data\\02_processed\\train\\",
+  "folder_test" : "data\\02_processed\\test\\",
+  "context_masks_folder": "data\\02_processed\\test\\missing_ratio_0\\context_masks\\",
+  "target_masks_folder": "data\\02_processed\\test\\missing_ratio_0\\target_masks\\",
+  "timeseries": [
+    {"filename": "sofs_praticagem.parquet",
+      "is_predicted": false,
+      "transformations": [],
+      "description": "sofs_praticagem",
+      "forecast": true },
+    {"filename": "current_praticagem.parquet",
+      "is_predicted": true,
+      "transformations": [],
+      "description": "current_praticagem",
+      "forecast": false }
+],
+      "input_datasets": ["sofs_praticagem", "current_praticagem"],
+      "target_datasets" : ["current_praticagem"]
+  }
