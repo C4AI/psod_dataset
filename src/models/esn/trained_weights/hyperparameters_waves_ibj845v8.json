@@ -1,0 +1,10 @@
+{
+    "leak_rate_1": 0.9124214731562612,
+    "time_constant": 4965,
+    "bias_scaling_1": 3.7242797466300943,
+    "connectivity_1": 0.447748280247057,
+    "input_scaling_1": 2.8961978715668115,
+    "reservoir_size_1": 900,
+    "ridge_parameter_1": 0.16348252717537157,
+    "spectral_radius_1": 0.5498121565249939
+}

@@ -11,3 +11,6 @@ torchdyn
 pytorch-lightning
 seaborn
 neuralforecast
+wandb
+pandas
+scipyscipy==1.14
