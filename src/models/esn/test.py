@@ -1,0 +1,219 @@
+import json
+import os
+import pandas as pd
+import torch
+import matplotlib.pyplot as plt
+import wandb
+import numpy as np
+import pathlib
+import sys
+import argparse
+
+sys.path.append("src")
+
+from processing.loader import SantosTestDatasetNumpy
+from model import TCLiESN
+from dataset import context_train_dataset, test_batcher
+
+
+def evaluate(savefig=False):
+    # Create directory structure
+    path = esn_config['save_path']
+    os.makedirs(path + "predpair/", exist_ok=True)
+    if savefig:
+        os.makedirs(path + "output/", exist_ok=True)
+
+    if args.wandb_api_key:
+        # Recover the best run from the wandb sweep
+        wandb.login(key=esn_config["wandb_api_key"])
+        api = wandb.Api()
+        wandb.init(project=esn_config['project_name'], entity=esn_config['username'])
+        runs = api.sweep(esn_config['username'] + '/' + esn_config['project_name'] + '/' + esn_config['sweep_id'])
+        run = runs.best_run()
+        dict_train = TCLiESN.config_2_dict(**run.config)
+    else:
+        dict_train = TCLiESN.config_2_dict(**json.load(open(args.wandb_run_file, 'r')))
+
+    # Recover hyperparameters from the wandb run and create the training dict
+    dict_train['seed'] = esn_config['seed']
+    dict_train['sparse'] = True
+    dict_train['torch_type'] = dataset_config['dtype']
+    dict_train["device"] = dataset_config['device']
+
+    # Load training dataset and create training batches
+    train_dl = context_train_dataset(**dataset_config)
+    train_ds, validate_ds = train_dl.split_batched_train_val(val_period_percentage=0.0,  # All data for training
+                                                             train_stride=esn_config['training_stride'],
+                                                             val_stride=esn_config["validation_stride"])
+    dict_train['input_dim'], dict_train['output_dim'], dict_train['out_maps'], dict_train[
+        'input_map'] = train_dl.get_dimensions()
+    inp_columns, pred_columns = train_dl.get_columns_names()
+
+    # Load test dataset and create test batches
+    data_path = pathlib.Path(dataset_config['folder_test'])
+    context_masks_path = pathlib.Path(dataset_config['context_masks_folder'])
+    target_masks_path = pathlib.Path(dataset_config['target_masks_folder'])
+
+    dataset = SantosTestDatasetNumpy(
+        data_path=data_path,
+        context_masks_path=context_masks_path,
+        target_masks_path=target_masks_path,
+    )
+
+    test_b = test_batcher(batches=dataset, inp_columns=inp_columns, pred_columns=pred_columns)
+    test = test_b.create_batches()
+
+    # Create Time continuous ESN
+    esn = TCLiESN(**dict_train)
+
+    if args.weights_folder is not None:
+        # Load trained weights
+        esn.load_weights(args.weights_folder)
+
+    # Train the ESN with the full dataset
+    if args.r or args.weights_folder is None:
+        esn.reset()
+        esn.train_epoch(train_ds)
+        esn.train_finalize()
+        os.makedirs(esn_config['save_path'] + '/fully_trained/', exist_ok=True)
+        esn.save_weights(esn_config['save_path'] + '/fully_trained/')
+
+    # Predict using the test dataset
+    inputs, predictions, losses = esn.predict_batches(test, forecast_horizon=esn_config["forecast_horizon"],
+                                                      warmup=esn_config["warmup"])
+    # Save outputs
+    os.makedirs(path + "predictions/", exist_ok=True)
+    esn.save_parquet(path + "predictions/", predictions)
+    # Log mean losses
+    losses_test = np.array(losses)
+    print('Mean losses test:' + str(np.nanmean(losses_test)) + '+-' + str(np.nanstd(losses_test)))
+
+    # Save figures
+    if savefig:
+        for idp, p in enumerate(predictions):
+            if p is not None:
+                ts, pp = p
+                for idx, pred_pair in enumerate(pp):
+                    plt.plot(pred_pair[:, 0].cpu(), 'm')
+                    plt.plot(pred_pair[:, 1].cpu(), 'b')
+                    plt.legend(('Prediction', 'Ground truth'))
+                    plt.title('IoA: ' + str(float(losses[idp][idx])))
+                    plt.savefig(path + "predpair/var_" + str(idx) + '-batch_' + str(idp),
+                                dpi=600)
+                    plt.clf()
+                try:
+                    tsp = torch.tensor([val for val in ts])
+                    series = tsp.shape[1]
+                except:
+                    tsp = torch.tensor(np.array([val[0].cpu() for val in ts]))
+                    tsp = torch.unsqueeze(tsp, 1)
+                    series = 1
+                timestamps = np.array([val[2] for val in ts])
+                tsi = torch.tensor(np.array([val[0] for val in inputs[idp]]))
+                timestamps_input = np.array([val[2] for val in inputs[idp]])
+                for idx in range(series):
+                    idxs = np.array(timestamps > timestamps[0] + np.timedelta64(esn_config["warmup"], 'h'))
+                    plt.plot(timestamps_input, tsi[:, idx], 'b')
+                    plt.plot(timestamps, tsp[:, idx].cpu(), 'r')
+                    plt.plot(timestamps[idxs], tsp[idxs, idx].cpu(), 'm')
+                    plt.legend(('Input', 'Warmup', 'Prediction'))
+                    plt.savefig(path + "output/var_" + str(idx) + '-batch_' + str(idp), dpi=600)
+                    plt.clf()
+                print('Saved figures: ' + str(idp))
+
+
+def load_dicts(arg):
+    # Prepare esn dict for use
+    ec = json.load(open(arg.esn_config, 'r'))
+
+    ec['save_path'] = arg.save_path
+    ec['save_name'] = arg.save_name
+    ec['wandb_api_key'] = arg.wandb_api_key
+    ec['warmup'] = pd.Timedelta(ec['warmup'], unit='hours')
+    ec['forecast_horizon'] = pd.Timedelta(ec['forecast_horizon'], unit='hours')
+    ec['training_stride'] = pd.Timedelta(ec['training_stride'], unit='hours')
+    ec['validation_stride'] = pd.Timedelta(ec['validation_stride'], unit='hours')
+    ec['device'] = torch.device(ec['device'])
+    if ec['dtype'] == 'float16':
+        ec['dtype'] = torch.float16
+    elif ec['dtype'] == 'float32':
+        ec['dtype'] = torch.float32
+    elif ec['dtype'] == 'float64':
+        ec['dtype'] = torch.float64
+
+    if arg.wandb_config is not None:
+        wb = json.load(open(arg.wandb_config, 'r'))
+
+        ec.update(wb)
+
+    # Prepare dataset dict for use
+    dc = json.load(open(arg.dataset_config, 'r'))
+    dc['dtype'] = ec['dtype']
+    dc['device'] = ec['device']
+    dc['warmup'] = ec['warmup']
+    dc['forecast_horizon'] = ec['forecast_horizon']
+    dc['timeseries'] = tuple(dc['timeseries'])
+    for ts in dc['timeseries']:
+        ts['path'] = dc['folder_train'] + ts['filename']
+
+    return ec, dc
+
+
+if __name__ == '__main__':
+
+    # The dataset_config is a json containing the time-series that will be used:
+    #   "timeseries" : tuple of dicts, where each entry is one time series
+    #   "input_datasets" : array of strings with the names of the datasets that will be used as input
+    #   "target_datasets" : array of strings with the names of the datasets that will be the target
+    # The array timeseries has the following parameters:
+    #   "filename" : file name of the parquet dataset
+    #   "forecast" : boolean indicating if the time series will is from a forecast
+    #   "is_predicted" : boolean that indicates to the dataloader if the time series will be predicted by the model
+    #   "transformations" : list of transformations that can be applied to the data (eg: lowpass filtering, z-score)
+    #   "description" : description of the dataset
+
+    # The esn_config is a json containing the parameters of the ESN model and WANDB configuration:
+    #   "warmup": ESN warmup in hours
+    #   "forecast_horizon": ESN forecast duration in hours
+    #   "seed":  Seed for pytorch and numpy
+    #   "training_stride": Stride for training sequential batches in hours
+    #   "validation_stride": Stride for validation sequential batches in hours
+    #   "validation_percentage": Percentage of the dataset that will be used for validation
+
+    # The wandb_config is a json containing the WANDB configuration:
+    #   "username": wandb username
+    #   "project_name": wandb project name
+    #   "sweep_id": wandb sweep to recover the runs
+    #   "steps": wandb sweep steps
+    #   "hyperparameter_opt_method": Hyperparameter optimization method
+    #   "sweep_parameters" : esn hyperparameters to be optimized
+
+    parser = argparse.ArgumentParser(prog='esn_santos', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser.add_argument('--dataset_config', help='Json with the dataset configuration.', required=True)
+    parser.add_argument('--esn_config', help='Json with the ESN and Wandb configuration.', required=True)
+    parser.add_argument('--save_path', help='Path for saving esn output/trained weights/figures', required=True)
+    parser.add_argument('-f', help='Save figures after evaluation.', action='store_true')
+    group = parser.add_mutually_exclusive_group(required=True)
+    group.add_argument('--wandb_run_file', help='Json with the wandb run hyperparameters')
+    group.add_argument('--wandb_api_key', help='WandB api key')
+    parser.add_argument('--wandb_config', help='Json with the wandb configuration used for training', required=False)
+    parser.add_argument('--weights_folder', help='Folder with the trained weights')
+    group2 = parser.add_argument_group('Retrain options')
+    parser.add_argument('-r', help='Retrain esn with full dataset before testing', action='store_true')
+    group2.add_argument('--save_name', help='Name for saving esn output/trained weights/figures', default='esn')
+
+    if len(sys.argv) == 1:
+        print('\n')
+        print(parser.print_help())
+        sys.exit(-1)
+
+    args = parser.parse_args()
+
+    if args.wandb_api_key is not None and args.wandb_config is None:
+        parser.error("--wandb_api_key option requires --wandb_config")
+    if args.wandb_config is not None and args.wandb_api_key is None:
+        parser.error("--wandb_config option can't be used along with --wandb_run_file")
+
+    esn_config, dataset_config = load_dicts(args)
+
+    evaluate(args.f)

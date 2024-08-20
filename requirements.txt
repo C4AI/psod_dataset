@@ -10,3 +10,6 @@ uniplot
 torchdyn
 pytorch-lightning
 seaborn
+wandb
+pandas
+scipyscipy==1.14

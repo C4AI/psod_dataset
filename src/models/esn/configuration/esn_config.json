@@ -1,0 +1,10 @@
+{
+    "seed": 38,     
+    "training_stride": 96,          
+    "validation_stride": 48,   
+    "validation_percentage": 0.2,       
+    "warmup": 168,     
+    "forecast_horizon": 48,
+    "device": "cuda",
+    "dtype": "float32"
+}
