@@ -1,6 +1,8 @@
 services:
   santos:
-    build: ./
+    build:
+      context: .
+      shm_size: '2gb'
     tty: true
     container_name: santos_dataset
     volumes:
