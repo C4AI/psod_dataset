@@ -1,5 +1,5 @@
 from collections import defaultdict
-import datetime
+import numpy as np
 import pathlib
 import torch
 from torch.utils.data import DataLoader
@@ -7,6 +7,7 @@ from model import (
     GapAheadAMTSRegressor,
     ModelConfig,
     PositionalEncoding,
+    index_agreement_torch,
 )
 import polars as pl
 import yaml
@@ -23,17 +24,23 @@ def main():
     batch_size = 64
     test_data_path = "data/02_processed/test"
     model_name = pathlib.Path(__file__).parent.name
+    model_out_name = "multivariate_gap_ahead_regressor"
     model_version = "20240807030811"
-    model_epoch = 90
-
+    model_epoch = 80
     model_path = f"data/04_trained_models/{model_name}/{model_version}"
 
     model_path_ = pathlib.Path(model_path)
 
-    out_path = f"data/05_inference_results/{model_name}"
+    missing_percentage = 80
+    out_path = f"data/05_inference_results/{model_out_name}"
 
     out_path = pathlib.Path(out_path)
     out_path.mkdir(parents=True, exist_ok=True)
+
+    with open(out_path / "model_version.txt", "w") as f:
+        f.write(model_version)
+        f.write("\n")
+        f.write(f"Epoch: {model_epoch}")
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
@@ -54,8 +61,12 @@ def main():
 
     test_dataset = SantosTestDatasetTorch(
         data_path=test_data_path,
-        context_masks_path=test_data_path / "missing_ratio_80" / "context_masks",
-        target_masks_path=test_data_path / "missing_ratio_80" / "target_masks",
+        context_masks_path=test_data_path
+        / f"missing_ratio_{missing_percentage}"
+        / "context_masks",
+        target_masks_path=test_data_path
+        / f"missing_ratio_{missing_percentage}"
+        / "target_masks",
         max_context_size=max_context_window_lengths,
     )
 
@@ -85,6 +96,8 @@ def main():
     model.load_state_dict(torch.load(model_path_ / f"epoch_{model_epoch}.pt"))
 
     model.eval()
+
+    all_losses: dict[str, list[pl.DataFrame]] = {}
     with torch.no_grad():
 
         model.to(device)
@@ -139,7 +152,29 @@ def main():
                 t_inferences=t_inferences,
             )
 
+            losses_by_ts = {
+                inner_ts: torch.stack(
+                    [
+                        1.0 - index_agreement_torch(f[i], y_features[inner_ts][i])
+                        for i in range(len(f))
+                        if f[i].size(0) > 0
+                    ]
+                )
+                for inner_ts, f in forecast.items()
+            }
+
+            for ts_name, losses in losses_by_ts.items():
+                if ts_name not in all_losses:
+                    all_losses[ts_name] = []
+                all_losses[ts_name].append(losses.cpu().numpy())
+
             for ts_name in y_features:
+                full_out_path = (
+                    out_path / str(ts_name) / f"missing_ratio_{missing_percentage}"
+                )
+
+                full_out_path.mkdir(parents=True, exist_ok=True)
+
                 for elem in forecast[ts_name]:
                     df = pl.DataFrame(
                         elem.detach().cpu().numpy(),
@@ -148,15 +183,16 @@ def main():
                             for feature_name in test_dataset.feature_names[ts_name]
                         },
                     )
-                    full_out_path = (
-                        out_path
-                        / ts_name
+
+                    df.write_parquet(
+                        full_out_path
                         / f"{str(elem_counts[ts_name]).rjust(3,"0")}.parquet"
                     )
-                    full_out_path.parent.mkdir(parents=True, exist_ok=True)
-                    df.write_parquet(full_out_path)
 
                     elem_counts[ts_name] += 1
+
+    for ts_name, dfs in all_losses.items():
+        print(f"{ts_name}: {np.concatenate(dfs).mean(axis=0)}")
 
 
 if __name__ == "__main__":

@@ -10,3 +10,4 @@ uniplot
 torchdyn
 pytorch-lightning
 seaborn
+neuralforecast

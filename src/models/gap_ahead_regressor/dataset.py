@@ -27,7 +27,12 @@ class SantosTrainDataset(SantosDataset):
         samples_per_epoch: int,
     ):
 
-        super().__init__(data_path=data_path)
+        super().__init__(
+            data_path=data_path,
+            ts_to_load=set(
+                list(context_window_lengths.keys()) + list(target_window_lengths.keys())
+            ),
+        )
 
         if len(context_window_lengths) == 0:
             raise ValueError("Context window lengths must be provided.")

@@ -55,6 +55,7 @@ class SantosDataset:
     def __init__(
         self,
         data_path: pathlib.Path,
+        ts_to_load: set[str],
     ):
         if not data_path.exists():
             raise FileNotFoundError(f"Path {data_path} does not exist.")
@@ -67,7 +68,7 @@ class SantosDataset:
         self.original_data = {
             f.stem: (df := pl.read_parquet(f))
             for f in self.data_path.glob("*.parquet")
-            if f.is_file()
+            if f.is_file() and f.stem in ts_to_load
         }
 
         self.feature_names = {
@@ -112,10 +113,14 @@ class SantosTestDataset(SantosDataset):
         data_path: pathlib.Path,
         context_masks_path: pathlib.Path,
         target_masks_path: pathlib.Path,
-        max_context_size: dict[str, float] | None = None,
+        max_context_size: dict[str, float],
     ):
-
-        super().__init__(data_path=data_path)
+        ts_to_load = {
+            f.stem.replace("_context", "")
+            for f in context_masks_path.glob("*.parquet")
+            if f.is_file() and f.stem.replace("_context", "") in max_context_size
+        }
+        super().__init__(data_path=data_path, ts_to_load=ts_to_load)
 
         if not context_masks_path.exists() or not target_masks_path.exists():
             raise FileNotFoundError(f"Path {data_path} does not exist.")
@@ -133,7 +138,7 @@ class SantosTestDataset(SantosDataset):
         self.original_context_masks = {
             f.stem.replace("_context", ""): pl.read_parquet(f)
             for f in self.context_masks_path.glob("*.parquet")
-            if f.is_file()
+            if f.is_file() and f.stem.replace("_context", "") in ts_to_load
         }
         mask_size_set = {mask.shape[1] for mask in self.original_context_masks.values()}
 
@@ -145,7 +150,7 @@ class SantosTestDataset(SantosDataset):
         self.original_target_masks = {
             f.stem.replace("_target", ""): pl.read_parquet(f)
             for f in self.target_masks_path.glob("*.parquet")
-            if f.is_file()
+            if f.is_file() and f.stem.replace("_target", "") in ts_to_load
         }
         mask_size_set = {mask.shape[1] for mask in self.original_target_masks.values()}
 
@@ -169,7 +174,7 @@ class SantosTestDatasetTorch(SantosTestDataset, TorchDataset):
         data_path: pathlib.Path,
         context_masks_path: pathlib.Path,
         target_masks_path: pathlib.Path,
-        max_context_size: dict[str, float] | None = None,
+        max_context_size: dict[str, float],
     ):
         super().__init__(
             data_path=data_path,
