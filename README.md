@@ -1,7 +1,3 @@
-Based on the content of the paper "Advancing Asynchronous Multivariate Time Series Forecasting: Insights from Oceanographic Data," here is a draft for the `README.md` file for the repository containing the experiments from this work.
-
----
-
 # AMTS Forecasting Experiments
 
 This repository contains the code, data, and models used in the experiments from the paper **"Advancing Asynchronous Multivariate Time Series Forecasting: Insights from Oceanographic Data."** The paper focuses on forecasting tasks in Asynchronous Multivariate Time Series (AMTS), with experiments conducted on the newly introduced Port of Santos Oceanographic Data (PSOD) dataset.
