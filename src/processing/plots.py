@@ -1,3 +1,4 @@
+import datetime
 import pathlib
 import matplotlib.pyplot as plt
 import polars as pl
@@ -103,6 +104,8 @@ def main():
     #     plot_order,
     # )
 
+    print_tables(source_folder_, model_dict, missing_ratios, plot_order, ts_dict)
+
     orig_src = pathlib.Path("data/02_processed")
     test_sources = {
         f.stem: pl.read_parquet(f) for f in (orig_src / "test").glob("*.parquet")
@@ -155,7 +158,71 @@ def main():
             fig.tight_layout()
             fig.savefig(out_folder_ / f"{ts_name}_{feat}_kde.pdf")
 
+            fig, ax = plt.subplots(1, figsize=(7, 5))
+
+            base_date = datetime.datetime(
+                2021, 1, 1, 0, 0, 0, tzinfo=datetime.timezone.utc
+            )
+            late_date = datetime.datetime(
+                2021, 1, 8, 0, 0, 0, tzinfo=datetime.timezone.utc
+            )
+
+            lbound = df["datetime"].search_sorted(base_date)
+            ubound = df["datetime"].search_sorted(late_date)
+
+            ax.plot(
+                df["datetime"][lbound:ubound],
+                df[feat][lbound:ubound],
+                label=name,
+                color="blue",
+            )
+            ax.legend()
+            ax.set_xlabel("Date", fontsize=15)
+            # rotate x labels
+            plt.xticks(rotation=45)
+            ax.set_ylabel(ts_name_dict[feat][1], fontsize=15)
+            fig.tight_layout()
+            fig.savefig(out_folder_ / f"{ts_name}_{feat}_time_series.pdf")
+
     print("Done")
+
+
+def print_tables(source_folder_, model_dict, missing_ratios, plot_order, ts_dict):
+
+    results = pl.DataFrame({"Model": [model_dict[model] for model in plot_order]})
+
+    for ts_name in ts_dict.keys():
+        for ratio in missing_ratios:
+            ts_folder = source_folder_ / ts_name / f"missing_ratio_{ratio}"
+            for metric_file in ts_folder.glob("*.parquet"):
+
+                metric_name = metric_file.stem.split("_")[-1]
+                feature_name = "_".join(metric_file.stem.split("_")[:-1])
+                if feature_name in ["cross_shore_current", "tp", "hs"]:
+                    continue
+                if metric_name == "ioa":
+                    continue
+                metric_df = pl.read_parquet(metric_file)
+                col = []
+                for model_name in plot_order:
+                    if model_name not in model_dict:
+                        continue
+
+                    values = metric_df.select(
+                        [
+                            pl.when(pl.col(model_name).is_not_nan())
+                            .then(pl.col(model_name))
+                            .otherwise(0)
+                            .alias(model_name)
+                        ]
+                    )[model_name]
+
+                    model_info = f"{values.mean():.2f} ± {values.std():.2f}"
+                    col.append(model_info)
+
+                results = results.with_columns(pl.Series(f"{ratio:02}%", col))
+
+        print(results.to_pandas().to_latex(index=False))
 
 
 def plot_degradation_curve(
