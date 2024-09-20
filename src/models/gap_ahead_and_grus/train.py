@@ -24,10 +24,10 @@ from dataset import SantosTrainDatasetTorch
 
 def main():
     NUM_LAYERS_RNN = 1
-    NUM_LAYERS_GNN = 0
+    NUM_LAYERS_GNN = 2
     TIME_ENCODING_SIZE = 0
     HIDDEN_UNITS = 200
-    NUM_HEADS_GNN = 0
+    NUM_HEADS_GNN = 8
 
     model_config = ModelConfig(
         num_layers_rnn=NUM_LAYERS_RNN,
@@ -70,12 +70,12 @@ def main():
     context_window_lengths = defaultdict(
         float,
         {
-            # "astronomical_tide": 60 * 48.0,
+            "astronomical_tide": 60 * 48.0,
             "current_praticagem": 60 * 48.0,
-        #     "sofs_praticagem": 60 * 48.0,
-        #     "ssh_praticagem": 60 * 48.0,
-        #     "waves_palmas": 60 * 48.0,
-        #     "wind_praticagem": 60 * 48.0,
+            "sofs_praticagem": 60 * 48.0,
+            "ssh_praticagem": 60 * 48.0,
+            "waves_palmas": 60 * 48.0,
+            "wind_praticagem": 60 * 48.0,
         },
     )
     # context_window_lengths = defaultdict(
@@ -94,48 +94,48 @@ def main():
     max_context_window_lengths = defaultdict(
         float,
         {
-            # "astronomical_tide": 60 * 24.0 * 2,
+            "astronomical_tide": 60 * 24.0 * 2,
             "current_praticagem": 60 * 24.0 * 7,
-            # "sofs_praticagem": 60 * 24.0 * 2,
-            # "ssh_praticagem": 60 * 24.0 * 7,
-            # "waves_palmas": 60 * 24.0 * 7,
-            # "wind_praticagem": 60 * 24.0 * 7,
+            "sofs_praticagem": 60 * 24.0 * 2,
+            "ssh_praticagem": 60 * 24.0 * 7,
+            "waves_palmas": 60 * 24.0 * 7,
+            "wind_praticagem": 60 * 24.0 * 7,
         },
     )
 
-    # target_window_lengths = defaultdict(
-    #     float,
-    #     {
-    #         "current_praticagem": 60 * 4.0,
-    #         # "waves_palmas": 60 * 4.0,
-    #         # "ssh_praticagem": 60 * 4.0,
-    #         # "wind_praticagem": 60 * 4.0,
-    #     },
-    # )
     target_window_lengths = defaultdict(
         float,
         {
-            "current_praticagem": 60 * 24.0 * 1,
-            # "waves_palmas": 60 * 24.0 * 2,
-            # "ssh_praticagem": 60 * 24.0 * 2,
-            # "wind_praticagem": 60 * 24.0 * 2,
+            "current_praticagem": 60 * 4.0,
+            "waves_palmas": 60 * 4.0,
+            "ssh_praticagem": 60 * 4.0,
+            "wind_praticagem": 60 * 4.0,
         },
     )
+    # target_window_lengths = defaultdict(
+    #     float,
+    #     {
+    #         "current_praticagem": 60 * 24.0 * 1,
+    #         "waves_palmas": 60 * 24.0 * 2,
+    #         "ssh_praticagem": 60 * 24.0 * 2,
+    #         "wind_praticagem": 60 * 24.0 * 2,
+    #     },
+    # )
     max_forecast_window_lengths = defaultdict(
         float,
         {
             "current_praticagem": 60 * 24.0 * 1,
-            # "waves_palmas": 60 * 24.0 * 2,
-            # "ssh_praticagem": 60 * 24.0 * 2,
-            # "wind_praticagem": 60 * 24.0 * 2,
+            "waves_palmas": 60 * 24.0 * 2,
+            "ssh_praticagem": 60 * 24.0 * 2,
+            "wind_praticagem": 60 * 24.0 * 2,
         },
     )
 
     look_ahead_lengths = defaultdict(
         float,
         {
-            # "astronomical_tide": 60 * 48.0,
-            # "sofs_praticagem": 60 * 48.0,
+            "astronomical_tide": 60 * 48.0,
+            "sofs_praticagem": 60 * 48.0,
         },
     )
 
