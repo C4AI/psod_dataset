@@ -21,17 +21,17 @@ from processing.loader import (
 
 def main():
 
-    batch_size = 64
+    batch_size = 32
     test_data_path = "data/02_processed/test"
     model_name = pathlib.Path(__file__).parent.name
-    model_out_name = "multivariate_gap_ahead_regressor"
-    model_version = "20240807030811"
-    model_epoch = 80
+    model_out_name = "gap_ahead_and_grus"
+    model_version = "20241205172736"
+    model_epoch = 99
     model_path = f"data/04_trained_models/{model_name}/{model_version}"
 
     model_path_ = pathlib.Path(model_path)
 
-    missing_percentage = 80
+    missing_percentage = 0
     out_path = f"data/05_inference_results/{model_out_name}"
 
     out_path = pathlib.Path(out_path)
@@ -50,12 +50,14 @@ def main():
     max_context_window_lengths = defaultdict(
         float,
         {
-            "astronomical_tide": 60 * 24.0 * 2,
-            "current_praticagem": 60 * 24.0 * 7,
-            "sofs_praticagem": 60 * 24.0 * 2,
-            "ssh_praticagem": 60 * 24.0 * 7,
-            "waves_palmas": 60 * 24.0 * 7,
-            "wind_praticagem": 60 * 24.0 * 7,
+            #"cattalini_corrente": 60 * 24.0 * 7,
+            #"cattalini_maregrafo": 60 * 24.0 * 7,
+            "cattalini_meteorologia": 60 * 24.0 * 7,
+            "odas_corrente": 60 * 24.0 * 7,
+            #"odas_meteorologia": 60 * 24.0 * 7,
+            "porto_astronomica": 60 * 24.0 * 7,
+            "porto_harmonico": 60 * 24.0 * 7,
+            "porto_maregrafo": 60 * 24.0 * 7,
         },
     )
 

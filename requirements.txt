@@ -1,5 +1,6 @@
 polars
 windrose
+numpy
 statsmodels
 matplotlib
 seaborn
@@ -13,4 +14,4 @@ seaborn
 neuralforecast
 wandb
 pandas
-scipyscipy==1.14
+scipy==1.14

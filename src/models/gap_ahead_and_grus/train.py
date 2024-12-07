@@ -25,9 +25,9 @@ from dataset import SantosTrainDatasetTorch
 def main():
     NUM_LAYERS_RNN = 1
     NUM_LAYERS_GNN = 2
-    TIME_ENCODING_SIZE = 0
-    HIDDEN_UNITS = 200
-    NUM_HEADS_GNN = 8
+    TIME_ENCODING_SIZE = 32
+    HIDDEN_UNITS = 64
+    NUM_HEADS_GNN = 4
 
     model_config = ModelConfig(
         num_layers_rnn=NUM_LAYERS_RNN,
@@ -38,7 +38,7 @@ def main():
     )
 
     epochs = 100
-    batch_size = 64
+    batch_size = 32
     context_increase_step = 60 * 12.0
     forecast_increase_step = 60 * 4.0
     sample_size_per_epoch = 10000
@@ -70,72 +70,54 @@ def main():
     context_window_lengths = defaultdict(
         float,
         {
-            "astronomical_tide": 60 * 48.0,
-            "current_praticagem": 60 * 48.0,
-            "sofs_praticagem": 60 * 48.0,
-            "ssh_praticagem": 60 * 48.0,
-            "waves_palmas": 60 * 48.0,
-            "wind_praticagem": 60 * 48.0,
+            #"cattalini_corrente": 60 * 48.0,
+            #"cattalini_maregrafo": 60 * 48.0,
+            "cattalini_meteorologia": 60 * 48.0,
+            "odas_corrente": 60 * 48.0,
+            #"odas_meteorologia": 60 * 48.0,
+            "porto_astronomica": 60 * 48.0,
+            "porto_harmonico": 60 * 48.0,
+            "porto_maregrafo": 60 * 48.0,
         },
     )
-    # context_window_lengths = defaultdict(
-    #     float,
-    #     {
-    #         # "astronomical_tide": 60 * 24.0 * 2,
-    #         "current_praticagem": 60 * 24.0 * 7,
-    #         # "sofs_praticagem": 60 * 24.0 * 2,
-    #         # "ssh_praticagem": 60 * 24.0 * 7,
-    #         # "waves_palmas": 60 * 24.0 * 7,
-    #         # "wind_praticagem": 60 * 24.0 * 7,
-    #     },
-    # )
-
 
     max_context_window_lengths = defaultdict(
         float,
         {
-            "astronomical_tide": 60 * 24.0 * 2,
-            "current_praticagem": 60 * 24.0 * 7,
-            "sofs_praticagem": 60 * 24.0 * 2,
-            "ssh_praticagem": 60 * 24.0 * 7,
-            "waves_palmas": 60 * 24.0 * 7,
-            "wind_praticagem": 60 * 24.0 * 7,
+            #"cattalini_corrente": 60 * 24.0 * 7,
+            #"cattalini_maregrafo": 60 * 24.0 * 7,
+            "cattalini_meteorologia": 60 * 24.0 * 7,
+            "odas_corrente": 60 * 24.0 * 7,
+            #"odas_meteorologia": 60 * 24.0 * 7,
+            "porto_astronomica": 60 * 24.0 * 7,
+            "porto_harmonico": 60 * 24.0 * 7,
+            "porto_maregrafo": 60 * 24.0 * 7,
         },
     )
 
     target_window_lengths = defaultdict(
         float,
         {
-            "current_praticagem": 60 * 4.0,
-            "waves_palmas": 60 * 4.0,
-            "ssh_praticagem": 60 * 4.0,
-            "wind_praticagem": 60 * 4.0,
+            #"cattalini_meteorologia": 60 * 24.0 * 2,
+            #"odas_corrente": 60 * 24.0 * 2,
+            "porto_maregrafo": 60 * 24.0 * 2,
         },
     )
-    # target_window_lengths = defaultdict(
-    #     float,
-    #     {
-    #         "current_praticagem": 60 * 24.0 * 1,
-    #         "waves_palmas": 60 * 24.0 * 2,
-    #         "ssh_praticagem": 60 * 24.0 * 2,
-    #         "wind_praticagem": 60 * 24.0 * 2,
-    #     },
-    # )
+
     max_forecast_window_lengths = defaultdict(
         float,
         {
-            "current_praticagem": 60 * 24.0 * 1,
-            "waves_palmas": 60 * 24.0 * 2,
-            "ssh_praticagem": 60 * 24.0 * 2,
-            "wind_praticagem": 60 * 24.0 * 2,
+            #"cattalini_meteorologia": 60 * 24.0 * 2,
+            #"odas_corrente": 60 * 24.0 * 2,
+            "porto_maregrafo": 60 * 24.0 * 2,
         },
     )
 
     look_ahead_lengths = defaultdict(
         float,
         {
-            "astronomical_tide": 60 * 48.0,
-            "sofs_praticagem": 60 * 48.0,
+            "porto_astronomica": 60 * 24.0 * 2,
+            "porto_harmonico": 60 * 24.0 * 2,
         },
     )
 
@@ -334,27 +316,56 @@ def main():
 
             if batch_count == len(test_dl) // 2:
                 for ts_name, y_ts_list in y_timestamps.items():
-                    if ts_name == "current_praticagem":
-                        uniplot.plot(
-                            xs=[
-                                y_ts_list[0].cpu().numpy(),
-                                y_ts_list[0].cpu().numpy(),
-                            ],
-                            ys=[
-                                y_features[ts_name][0][:, 0].squeeze().cpu().numpy(),
-                                forecast[ts_name][0][:, 0]
-                                .squeeze()
-                                .cpu()
-                                .detach()
-                                .numpy(),
-                            ],
-                            color=True,
-                            legend_labels=["Target", "Forecast"],
-                            title=ts_name,
-                        )
-                    elif ts_name == "waves_palmas":
+                    if ts_name == "cattalini_meteorologia":
+                        feats = ["ws", "wd"]
+                        for i, f in enumerate(feats):
+                            uniplot.plot(
+                                xs=[
+                                    y_ts_list[0].cpu().numpy(),
+                                    y_ts_list[0].cpu().numpy(),
+                                ],
+                                ys=[
+                                    y_features[ts_name][0][:, i]
+                                    .squeeze()
+                                    .cpu()
+                                    .numpy(),
+                                    forecast[ts_name][0][:, i]
+                                    .squeeze()
+                                    .cpu()
+                                    .detach()
+                                    .numpy(),
+                                ],
+                                color=True,
+                                legend_labels=["Target", "Forecast"],
+                                title=f"{ts_name} {f}",
+                            )
+                    elif ts_name == "odas_corrente":
 
-                        feats = ["hs", "tp", "ws"]
+                        feats = ["cs", "cd"]
+                        for i, f in enumerate(feats):
+                            uniplot.plot(
+                                xs=[
+                                    y_ts_list[0].cpu().numpy(),
+                                    y_ts_list[0].cpu().numpy(),
+                                ],
+                                ys=[
+                                    y_features[ts_name][0][:, i]
+                                    .squeeze()
+                                    .cpu()
+                                    .numpy(),
+                                    forecast[ts_name][0][:, i]
+                                    .squeeze()
+                                    .cpu()
+                                    .detach()
+                                    .numpy(),
+                                ],
+                                color=True,
+                                legend_labels=["Target", "Forecast"],
+                                title=f"{ts_name} {f}",
+                            )
+                    elif ts_name == "porto_maregrafo":
+
+                        feats = ["ssh"]
                         for i, f in enumerate(feats):
                             uniplot.plot(
                                 xs=[
